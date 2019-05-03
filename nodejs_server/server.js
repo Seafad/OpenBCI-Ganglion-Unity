@@ -6,16 +6,25 @@ const ganglion = new Ganglion();
 var host = '127.0.0.1';
 var port = 8080;
 var socket;
-var DataType = {GanglionInfo: 0, EEG: 1, Error: 2};
-var foundGanglions = {
-			type: DataType.GanglionInfo,
-			data: []
-		};
+var DataType = {StatusOk: 0, EEG: 1, Impedance: 2, GanglionInfo: 3, Message: 8, Error: 9};
+var foundGanglions = [];
 var startupError;
 
 net.createServer(function(sock) {
 	socket = sock;
-    console.log('Client connected: ' + socket.remoteAddress +':'+ socket.remoteport);
+    log('Client connected: ' + socket.remoteAddress +':'+ socket.remoteport);
+	
+	socket.on('error', function (err) {
+	if(err.code == "EPIPE"){
+		socket.end();
+		return;
+	}
+	if(socket){
+		sendData(DataType.Error, err.toString());
+	}else{
+		startupError = err.toString();
+	}
+	});
 	
     socket.on('data', function(data) {
 		let strData = data.toString();
@@ -23,25 +32,53 @@ net.createServer(function(sock) {
     });
 
     socket.on('close', function(data) {
-        console.log('CLOSED: ' + socket.remoteAddress +' '+ socket.remotePort);
+		if(ganglion.isConnected()){
+			log("Disconnecting on close");
+			ganglion.disconnect(true);
+		}
+        log('Socket closed: ' + socket.remoteAddress +' '+ socket.remotePort);
     });
 	
+	
 	if(startupError){
-		socket.write(startupError);
+		sendData(DataType.Error, startupError);
 		return;
 	}
- 
-	if(foundGanglions.data.length > 0){
-		console.log("Peripherals startup: " + JSON.stringify(foundGanglions));
-		socket.write(JSON.stringify(foundGanglions));
+	for(let i = 0; i < foundGanglions.length; i++){
+		log("Send data for Ganglion " + (i + 1) + ':\n' + JSON.stringify(foundGanglions[i]));
+		sendData(DataType.GanglionInfo, foundGanglions[i]);
 	}
-
 }).listen(port, host);
 
-console.log('Server listening on ' + host +':'+ port)
+log('Server listening on ' + host +':'+ port);
 
+function sendData(dataType, data){
+	if(!socket)
+		return;
+	if(data == null){
+		socket.write(dataType.toString())
+	}else{
+	socket.write(dataType + '|' + JSON.stringify(data));
+	}
+}
+
+function log(message){
+	console.log('[' + new Date().toLocaleTimeString() + ']: ' + message )
+}
+
+
+process.on('uncaughtException', function (err) {
+	log(err);
+	if(socket){
+		sendData(DataType.Error, err.toString());
+	}else{
+		startupError = err.toString();
+	}
+});
+
+//Ganglion
 ganglion.once("ganglionFound", peripheral => {
-		foundGanglions.data.push(
+		foundGanglions.push(
 			{
 				id: peripheral.id,
 				name: peripheral.advertisement.localName, 
@@ -49,74 +86,125 @@ ganglion.once("ganglionFound", peripheral => {
 				connectable: peripheral.connectable
 			});
 		if(socket){
-			socket.write(JSON.stringify(foundGanglions));
+			for(let i = 0; i < foundGanglions.length; i++){
+				sendData(DataType.GanglionInfo, foundGanglions[i]);
+			}
 		}
-		console.log("Peripheral found: " + JSON.stringify(foundGanglions));
+		log("New peripheral found " + peripheral.advertisement.localName);
 		ganglion.searchStop();
+});
+
+ganglion.on('rawDataPacket', packet => {
+	log("RAW: " + packet);
+});
+
+ganglion.on('message', message =>{
+	sendData(DataType.Message, message);
+});
+
+ganglion.on("sample", sample => {
+	if(sample.valid){
+		if(sample.accelDataCounts){
+			sendData(DataType.EEG, {
+				sampleNumber: sample.sampleNumber,
+				channelData: sample.channelData,
+				accelData: sample.accelDataCounts
+			});
+		}else{
+			sendData(DataType.EEG, {
+			sampleNumber: sample.sampleNumber,
+			channelData: sample.channelData
+			});
+		}
+	}
+});
+/*
+ganglion.on('accelerometer', accel => {
+	sendData(DataType.Accelerometer, accel);
+});
+*/
+
+ganglion.on('impedance', impedance => {
+	sendData(DataType.Impedance, impedance);
 });
 
 
 function processCommand(strData){
 	if(!ganglion.isNobleReady()){
-		socket.write(JSON.stringify({
-		type: DataType.Error,
-		data: 'Error: No compatible USB Bluetooth 4.0 device found!'
-	}));
-	return;
+		sendData(DataType.Error, 'Error: No compatible USB Bluetooth 4.0 device found!');
+		return;
 	}
 	
 	let command = strData[0];
-	console.log("Received Command: " + command);
+	log("Received Command: " + command);
 	
-	 switch(command){
-		 case 'b': {
-			if(ganglion.isConnected()){
-				ganglion.streamStart();
-				ganglion.on("sample", sample => {
-					socket.write(JSON.stringify({type: DataType.EEG, data: sample}));
-				});
-			}
-			break;
-			}
-		 case 's': {
-			 if(ganglion.isConnected())
-				 ganglion.streamStop();
-			 break;
-			}
-		 case 'i':	{
+	switch(command){
+		case 'i':	{
+			log("Starting search");
 			peripherals = [];
-			ganglion.searchStart(35000);
+			ganglion.searchStart(50000).then(null, fail);
 			break;
 		 }
-		 case 'e': {
-			 ganglion.searchStop();
-			 break;
+		case 'e': {
+			log("Stopping search");
+			ganglion.searchStop().then(null, fail);
+			break;
 		 }
-		 case 'c': {
-			 ganglion.connect(peripherals[0]);
-			 ganglion.once("ready", () => {
-			 });
-			 break;
-		 }
-		 case 'd': {
-			 ganglion.disconnect(true);
+		case 'c': {
+			let id = strData.substr(1, strData.length);
+			log("Connecting to " + id + "...");
+			ganglion.once("ready", () => {
+				log("Ready.");
+				sendData(DataType.StatusOk, null);
+			});
+			ganglion.connect(id).then(null, fail);
+			break;
+		}
+		case 'd': {
+			log("Disconnecting...");
+			ganglion.disconnect(true).then(onDisconnected, fail);
+			break;
 		 } 
-		 default:{
-			 ganglion.write(command);
-		 }
-	 }; 	
- };
- 	
-process.on('uncaughtException', function (err) {
-  console.log(err);
-  let error = JSON.stringify({
-		type: DataType.Error,
-		data: err.toString()
-	});
-  if(socket){
-	socket.write(error);
-  }else{
-	 startupError = error;
-  }
-});
+		case 'b': {
+			log("Starting stream");
+			if(ganglion.isConnected()){
+				ganglion.streamStart().then(null, fail);
+			}
+			break;
+		}
+		case 's': {
+			log("Stopping stream");
+			if(ganglion.isConnected())
+				ganglion.streamStop().then(null, fail);
+			break;
+		}
 
+		case 'z':{
+			log("Activating impedance test");
+			ganglion.impedanceStart();
+			break
+		}
+		case 'Z':{
+			log("Deactivating impedance test");
+			ganglion.impedanceStop();
+			break
+		}
+		default:{
+			ganglion.write(command).then(null, fail);
+			break;
+		}
+	}; 	
+};
+
+function printRegisters(res){
+	log("Resgisters: " + res);
+}
+function onDisconnected(){
+	log("Disconnected.");
+	sendData(DataType.StatusOk, null);
+}
+
+function fail(res){
+	log("Operation failed: " + res.toString());
+	sendData(DataType.Error, res.toString());
+}

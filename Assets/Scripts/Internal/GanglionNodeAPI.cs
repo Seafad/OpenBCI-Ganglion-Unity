@@ -1,22 +1,24 @@
-﻿using GanglionUnity.Data;
-using System;
+﻿using System;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
 
-
 namespace GanglionUnity.Internal
 {
     /// <summary>
-    /// API for node.js server with noble.
+    /// Implementation of API with OpenBCI Ganglion Node.js server
     /// </summary>
     public class GanglionNodeAPI : GanglionAPI
     {
+        private enum ResponseType : byte { StatusOk = 0, EEG = 1, Impedance = 2, GanglionInfo = 3, Message = 8, Error = 9 };
+
         private TcpClient client;
         private NetworkStream networkStream;
         private Timer searchTimer;
         private byte[] dataBuffer;
+        private string[] EEGPacketsSplit = new string[] { "1|" };
+
 
         public GanglionNodeAPI(string host, int port)
         {
@@ -30,8 +32,7 @@ namespace GanglionUnity.Internal
             }
             catch (Exception e)
             {
-                Debug.LogError(GetType().Name + ">>Connection error. Please set up and launch node.js server. \n>>" + e.Message);
-
+                Debug.LogError(GetType().Name + ">>Connection error. Please set up and launch node.js server\n>>" + e.Message);
             }
         }
 
@@ -45,22 +46,58 @@ namespace GanglionUnity.Internal
         {
             networkStream.EndRead(ar);
             networkStream.Flush();
-            var json = Encoding.ASCII.GetString(dataBuffer);
-            var response = NodeResponse.FromJSON(json);
-            Debug.Log("Data received: " + json);
-            Debug.Log("Response received: " + response.ToString());
+
+            var response = Encoding.ASCII.GetString(dataBuffer);
+            ResponseType type = (ResponseType)(response[0] - '0');
+            var json = response.Substring(2);
+
+            switch (type)
+            {
+                case ResponseType.StatusOk:
+                    OperationSuccessInvoke();
+                    break;
+                case ResponseType.GanglionInfo:
+                    var g = JsonUtility.FromJson<GanglionInfo>(json);
+                    GanglionFoundInvoke(g);
+                    break;
+                case ResponseType.EEG:
+                    var eegs = json.Split(EEGPacketsSplit, StringSplitOptions.None);
+                    EEGSample[] samples = new EEGSample[eegs.Length];
+                    var i = 0;
+                    foreach (var eegjson in eegs)
+                    {
+                        var sample = JsonUtility.FromJson<DataSample>(eegjson);
+                        if (sample.accelData != null)
+                            AccelDataReceivedInvoke(sample.accelData);
+                        samples[i++] = new EEGSample(sample);
+                    }
+                    EEGReceivedInvoke(samples);
+
+                    break;
+                case ResponseType.Impedance:
+                    var impedance = JsonUtility.FromJson<Impedance>(json);
+                    ImpedanceReceivedInvoke(new int[] { impedance.channelNumber, impedance.impedanceValue });
+                    break;
+                case ResponseType.Message:
+                    MessageInvoke(json);
+                    break;
+                case ResponseType.Error:
+                    Debug.Log(GetType().Name + ">>Server error\n>>" + json);
+                    break;
+            }
+
+            for (int i = 0; i < dataBuffer.Length; i++)
+                dataBuffer[i] = 0;
             networkStream.BeginRead(dataBuffer, 0, client.ReceiveBufferSize, OnDataReceived, null);
         }
 
         public override void Connect(GanglionInfo info)
         {
-            Debug.Log("Connecting to " + info.id);
-            SendData("c" + info.id);
+            SendData("c" + info.name);
         }
 
         public override void Disconnect()
         {
-            Debug.Log("Disconnecting");
             SendData('d');
         }
 
@@ -74,7 +111,8 @@ namespace GanglionUnity.Internal
             try
             {
                 SendData('i');
-            }catch(Exception e)
+            }
+            catch (Exception e)
             {
                 Debug.LogError(GetType().Name + ">>Connection error. Please set up and launch node.js server. \n>>" + e.Message);
             }
@@ -84,30 +122,23 @@ namespace GanglionUnity.Internal
         private void OnSearchTimeEnded(object obj)
         {
             SendData('e');
-            GanglionController.Instance.OnSearchEnded.Invoke();
+            SearchEndedInvoke();
             searchTimer.Dispose();
         }
 
         public override void SetFakeSquareWaveMode(bool isFakeSquareWaveMode)
         {
-            SendData('?');
+            SendData(isFakeSquareWaveMode ? '[' : ']');
         }
 
-        public override void SetImpendanceMode(bool isImpendanceMode)
+        public override void SetImpedanceMode(bool isImpedanceMode)
         {
-            if (isImpendanceMode)
-            {
-                SendData('z');
-            }
-            else
-            {
-                SendData('Z');
-            }
+            SendData(isImpedanceMode ? 'z' : 'Z');
         }
 
-        public override void SetSendAccelerometerData(bool isAccelerometerOn)
+        public override void SetSendAccelerometerData(bool turnOn)
         {
-            throw new NotImplementedException();
+            SendData(turnOn ? 'n' : 'N');
         }
 
         public override void SoftReset()
@@ -118,6 +149,11 @@ namespace GanglionUnity.Internal
         public override void StartDataStream()
         {
             SendData('b');
+        }
+
+        public override void StopDataStream()
+        {
+            SendData('s');
         }
 
         public override void StartSDCardLogging(SDCardLoggingMode loggingMode)
@@ -154,59 +190,29 @@ namespace GanglionUnity.Internal
             }
         }
 
-        public override void StopDataStream()
-        {
-            SendData('s');
-        }
-
         public override void StopSDCardLogging()
         {
             SendData('j');
         }
 
-        public override void TurnOffChannel(int channelNumber)
+        public override void SetChannelActive(int channelNumber, bool turnOn)
         {
-            if(channelNumber < 1 || channelNumber > 4)
-            {
-                throw new ArgumentOutOfRangeException("channelNumber");
-            }
             switch (channelNumber)
             {
                 case 1:
-                    SendData('!');
+                    SendData(turnOn ? '!' : '1');
                     break;
                 case 2:
-                    SendData('@');
+                    SendData(turnOn ? '@' : '2');
                     break;
                 case 3:
-                    SendData('#');
+                    SendData(turnOn ? '#' : '3');
                     break;
                 case 4:
-                    SendData('$');
+                    SendData(turnOn ? '$' : '4');
                     break;
-            }
-        }
-
-        public override void TurnOnChannel(int channelNumber)
-        {
-            if (channelNumber < 1 || channelNumber > 4)
-            {
-                throw new ArgumentOutOfRangeException("channelNumber");
-            }
-            switch (channelNumber)
-            {
-                case 1:
-                    SendData('1');
-                    break;
-                case 2:
-                    SendData('2');
-                    break;
-                case 3:
-                    SendData('3');
-                    break;
-                case 4:
-                    SendData('4');
-                    break;
+                default:
+                    throw new ArgumentOutOfRangeException("channelNumber");
             }
         }
 
@@ -224,6 +230,11 @@ namespace GanglionUnity.Internal
             byte[] bytesToSend = Encoding.ASCII.GetBytes(data);
             stream.Write(bytesToSend, 0, bytesToSend.Length);
             stream.Flush();
+        }
+
+        public override void Dispose()
+        {
+            client.Dispose();
         }
     }
 }
