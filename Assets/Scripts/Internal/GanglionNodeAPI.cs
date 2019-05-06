@@ -49,7 +49,7 @@ namespace GanglionUnity.Internal
 
             var response = Encoding.ASCII.GetString(dataBuffer);
             ResponseType type = (ResponseType)(response[0] - '0');
-            var json = response.Substring(2);
+            var data = response.Substring(2);
 
             switch (type)
             {
@@ -57,11 +57,11 @@ namespace GanglionUnity.Internal
                     OperationSuccessInvoke();
                     break;
                 case ResponseType.GanglionInfo:
-                    var g = JsonUtility.FromJson<GanglionInfo>(json);
+                    var g = JsonUtility.FromJson<GanglionInfo>(data);
                     GanglionFoundInvoke(g);
                     break;
                 case ResponseType.EEG:
-                    var eegs = json.Split(EEGPacketsSplit, StringSplitOptions.None);
+                    var eegs = data.Split(EEGPacketsSplit, StringSplitOptions.None);
                     EEGSample[] samples = new EEGSample[eegs.Length];
                     var i = 0;
                     foreach (var eegjson in eegs)
@@ -72,17 +72,16 @@ namespace GanglionUnity.Internal
                         samples[i++] = new EEGSample(sample);
                     }
                     EEGReceivedInvoke(samples);
-
                     break;
                 case ResponseType.Impedance:
-                    var impedance = JsonUtility.FromJson<Impedance>(json);
+                    var impedance = JsonUtility.FromJson<Impedance>(data);
                     ImpedanceReceivedInvoke(new int[] { impedance.channelNumber, impedance.impedanceValue });
                     break;
                 case ResponseType.Message:
-                    MessageInvoke(json);
+                    MessageInvoke(data);
                     break;
                 case ResponseType.Error:
-                    Debug.Log(GetType().Name + ">>Server error\n>>" + json);
+                    Debug.Log(GetType().Name + ">>Server error\n>>" + data);
                     break;
             }
 

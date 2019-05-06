@@ -1,6 +1,7 @@
 const net = require('net');
 const Ganglion = require("@openbci/ganglion");
 const ganglion = new Ganglion();
+ganglion.options.nobleScanOnPowerOn = false;
 
 //Server
 var host = '127.0.0.1';
@@ -12,7 +13,7 @@ var startupError;
 
 net.createServer(function(sock) {
 	socket = sock;
-    log('Client connected: ' + socket.remoteAddress +':'+ socket.remoteport);
+    log('Client connected: ' + socket.remoteAddress +':'+ socket.remotePort);
 	
 	socket.on('error', function (err) {
 	if(err.code == "EPIPE"){
@@ -51,7 +52,6 @@ net.createServer(function(sock) {
 }).listen(port, host);
 
 log('Server listening on ' + host +':'+ port);
-
 function sendData(dataType, data){
 	if(!socket)
 		return;
