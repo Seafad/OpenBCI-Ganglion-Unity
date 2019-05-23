@@ -35,7 +35,7 @@ namespace GanglionUnity.Examples
             accelToggle.onValueChanged.AddListener(OnAccelToggleChange);
             controller.OnConnected.AddListener(OnConnected);
             controller.OnDisconnected.AddListener(OnDisconnected);
-            controller.OnEEGReceived.AddListener(OnEEG);
+            //controller.OnEEGReceived.AddListener(OnEEG);
             controller.OnAccelDataReceived.AddListener(OnAccelerometer);
             controller.OnImpedanceReceived.AddListener(OnImpedance);
         }

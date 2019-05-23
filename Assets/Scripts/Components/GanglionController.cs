@@ -36,15 +36,14 @@ namespace GanglionUnity.Components
         private List<EEGSample> eegBuffer = new List<EEGSample>();
         private Vector3 lastAccel = new Vector3();
         private int[] lastImpedance = new int[2];
-
         private GanglionAPI api;
         private bool[] activeChannels = new bool[4];
+        private static object _lock = new object();
 
         private void Awake()
         {
             if (Instance == null) Instance = this;
             else return;
-
             switch (connectionType)
             {
                 case ConnectionType.Node:
@@ -53,6 +52,7 @@ namespace GanglionUnity.Components
                 case ConnectionType.NativeCppDriver:
                     throw new NotImplementedException("Native driver hasn't been implemented yet. Please use Node.js driver. More info at https://github.com/OpenBCI/OpenBCI_NodeJS_Ganglion");
             }
+
             api.GanglionFound += GanglionFoundNotify;
             api.SearchEnded += SearchEndedNotify;
             api.OperationSuccess += OnOperationSuccessNotify;
@@ -69,8 +69,11 @@ namespace GanglionUnity.Components
             {
                 if (isEEGReceivedFlag)
                 {
-                    OnEEGReceived.Invoke(eegBuffer.ToArray());
-                    eegBuffer.Clear();
+                    lock (_lock)
+                    {
+                        OnEEGReceived.Invoke(eegBuffer);
+                        eegBuffer.Clear();
+                    }
                     isEEGReceivedFlag = false;
                     return;
                 }
@@ -165,7 +168,10 @@ namespace GanglionUnity.Components
 
         private void OnEEGReceivedNotify(object sender, EEGSample[] eegs)
         {
-            eegBuffer.AddRange(eegs);
+            lock (_lock)
+            {
+                eegBuffer.AddRange(eegs);
+            }
             isEEGReceivedFlag = true;
         }
         private void OnAccelDataReceivedNotify(object sender, float[] accel)
@@ -330,7 +336,7 @@ namespace GanglionUnity.Components
             api.Dispose();
         }
     }
-    [Serializable] public class EEGEvent : UnityEvent<EEGSample[]> { };
+    [Serializable] public class EEGEvent : UnityEvent<List<EEGSample>> { };
     [Serializable] public class AccelerationEvent : UnityEvent<Vector3> { };
     [Serializable] public class ImpedanceEvent : UnityEvent<int, int> { };
     [Serializable] public class MessageEvent : UnityEvent<string> { };

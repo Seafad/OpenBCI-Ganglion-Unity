@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 namespace GanglionUnity.Internal
 {
@@ -13,6 +15,7 @@ namespace GanglionUnity.Internal
     {
         private enum ResponseType : byte { StatusOk = 0, EEG = 1, Impedance = 2, GanglionInfo = 3, Message = 8, Error = 9 };
 
+        private Process serverProcess;
         private TcpClient client;
         private NetworkStream networkStream;
         private Timer searchTimer;
@@ -24,6 +27,7 @@ namespace GanglionUnity.Internal
         {
             try
             {
+                StartNodeServer();
                 client = new TcpClient();
                 dataBuffer = new byte[client.ReceiveBufferSize];
                 client.Connect(host, port);
@@ -40,6 +44,23 @@ namespace GanglionUnity.Internal
         {
             client.Close();
             client.Dispose();
+            serverProcess.Dispose();
+        }
+
+        private void StartNodeServer()
+        {
+            try
+            {
+                serverProcess = new Process();
+                serverProcess.EnableRaisingEvents = false;
+                serverProcess.StartInfo.FileName = Application.dataPath + "/node_server~/server-win.exe";
+                serverProcess.StartInfo.UseShellExecute = false;
+                serverProcess.Start();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("Unable to launch Node.js driver: " + e.Message);
+            }
         }
 
         private void OnDataReceived(IAsyncResult ar)
@@ -234,6 +255,7 @@ namespace GanglionUnity.Internal
         public override void Dispose()
         {
             client.Dispose();
+            serverProcess.Dispose();
         }
     }
 }
