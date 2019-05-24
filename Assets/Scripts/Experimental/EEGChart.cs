@@ -33,11 +33,11 @@ namespace GanglionUnity.Experimental
             leftPos = rectTransform.position.x;
             
             
-            valCount = (int)(width / step);
+            valCount = (int)(width / step) - 1;
             values = new List<double>(valCount);
             currValueIndex = 0;
             lineRenderer.positionCount = valCount;
-            Vector3 right = new Vector3(leftPos + width, rectTransform.position.y);
+            Vector3 right = new Vector3(leftPos + width + step, rectTransform.position.y);
             for(int i = 0; i < valCount; i++)
             {
                 lineRenderer.SetPosition(i, right);
