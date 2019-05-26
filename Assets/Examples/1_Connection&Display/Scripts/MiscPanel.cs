@@ -7,11 +7,11 @@ using UnityEngine.UI;
 namespace GanglionUnity.Examples
 {
     /// <summary>
-    /// Example of UI for accessing additional Ganglion commands with GanglionController
+    /// Example of UI for accessing additional Ganglion commands with GanglionManager
     /// </summary>
     public class MiscPanel : MonoBehaviour
     {
-        [SerializeField] private GanglionController controller;
+        [SerializeField] private GanglionManager ganglion;
         [SerializeField] private Button softResetButton, reportRegistersButton;
 
         private LinkedList<string> lastMessages = new LinkedList<string>();
@@ -22,8 +22,8 @@ namespace GanglionUnity.Examples
             UpdateUIState(false);
             softResetButton.onClick.AddListener(OnSoftResetClick);
             reportRegistersButton.onClick.AddListener(OnReportRegistersClick);
-            controller.OnConnected.AddListener(OnConnected);
-            controller.OnDisconnected.AddListener(OnDisconnected);
+            ganglion.OnConnected.AddListener(OnConnected);
+            ganglion.OnDisconnected.AddListener(OnDisconnected);
         }
 
         private void UpdateUIState(bool isGanglionConnected)
@@ -42,12 +42,12 @@ namespace GanglionUnity.Examples
 
         private void OnSoftResetClick()
         {
-            controller.SoftReset();
+            ganglion.SoftReset();
         }
 
         private void OnReportRegistersClick()
         {
-            controller.ReportRegisterSettings();
+            ganglion.ReportRegisterSettings();
         }
 
         private void OnConnected()

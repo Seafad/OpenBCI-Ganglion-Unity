@@ -139,6 +139,13 @@ namespace GanglionUnity.Internal
             searchTimer = new Timer(OnSearchTimeEnded, null, timeoutSecs * 1000, 0);
         }
 
+        public override void StopSearch()
+        {
+            SendData('e');
+            SearchEndedInvoke();
+            searchTimer.Dispose();
+        }
+
         private void OnSearchTimeEnded(object obj)
         {
             SendData('e');

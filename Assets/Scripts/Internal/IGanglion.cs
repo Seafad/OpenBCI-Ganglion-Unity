@@ -3,6 +3,7 @@
     public interface IGanglion
     {
         void Search(int timeoutSecs);
+        void StopSearch();
         void Connect(GanglionInfo info);
         void Disconnect();
         void StartDataStream();

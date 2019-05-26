@@ -9,12 +9,12 @@ using UnityEngine.Events;
 /// </summary>
 namespace GanglionUnity.Components
 {
-    public class GanglionController : MonoBehaviour, IGanglion
+    public class GanglionManager : MonoBehaviour, IGanglion
     {
         public enum ConnectionType { Node, NativeCppDriver }
         public enum State { NotConnected, Searching, Connected, StreamingData, ImpedanceTest }
 
-        public static GanglionController Instance { get; private set; }
+        public static GanglionManager Instance { get; private set; }
         public State CurrentState { get; private set; }
 
         public GanglionFoundEvent OnGanglionFound;
@@ -196,9 +196,22 @@ namespace GanglionUnity.Components
             Search();
         }
 
+        public void StopSearch()
+        {
+            if (CurrentState == State.Searching)
+            {
+                api.StopSearch();
+                CurrentState = State.NotConnected;
+            }
+            else
+            {
+                OnMessage.Invoke("Search cannot be stopped: no search started");
+            }
+        }
+
         public void Connect(GanglionInfo info)
         {
-            if (CurrentState == State.NotConnected || CurrentState == State.Searching)
+            if (CurrentState == State.NotConnected)
             {
                 api.Connect(info);
             }

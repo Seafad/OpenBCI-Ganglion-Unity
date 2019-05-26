@@ -7,11 +7,11 @@ namespace GanglionUnity.Examples
 {
 
     /// <summary>
-    /// Example of UI controlling Ganglion data with GanglionController
+    /// Example of UI controlling Ganglion data with GanglionManager
     /// </summary>
     public class DataControlPanel : MonoBehaviour
     {
-        [SerializeField] private GanglionController controller;
+        [SerializeField] private GanglionManager ganglion;
         [SerializeField] private Button startStreamButton, stopStreamButton;
         [SerializeField] private Toggle channel1Toggle, channel2Toggle, channel3Toggle, channel4Toggle;
         [SerializeField] private Toggle accelToggle, impedanceToggle, synthToggle;
@@ -33,29 +33,8 @@ namespace GanglionUnity.Examples
             synthToggle.onValueChanged.AddListener(OnSynthToggleChange);
             impedanceToggle.onValueChanged.AddListener(OnImpedanceToggleChange);
             accelToggle.onValueChanged.AddListener(OnAccelToggleChange);
-            controller.OnConnected.AddListener(OnConnected);
-            controller.OnDisconnected.AddListener(OnDisconnected);
-            //controller.OnEEGReceived.AddListener(OnEEG);
-            controller.OnAccelDataReceived.AddListener(OnAccelerometer);
-            controller.OnImpedanceReceived.AddListener(OnImpedance);
-        }
-
-        private void OnEEG(EEGSample[] eegs)
-        {
-            foreach (var eeg in eegs)
-            {
-                Debug.Log("EEG Sample Received in UI: " + eeg.sampleNumber);
-            }
-        }
-
-        private void OnAccelerometer(Vector3 acceleration)
-        {
-            Debug.Log("Acceleration Received in UI: " + acceleration.ToString());
-        }
-
-        private void OnImpedance(int channelNumber, int value)
-        {
-            Debug.Log("Impedance Received in UI: " + channelNumber + " - " + value);
+            ganglion.OnConnected.AddListener(OnConnected);
+            ganglion.OnDisconnected.AddListener(OnDisconnected);
         }
 
         private void UpdateUIState(bool isGanglionConnected)
@@ -87,51 +66,51 @@ namespace GanglionUnity.Examples
         #region Listeners
         private void OnStartStreamClick()
         {
-            controller.StartDataStream();
+            ganglion.StartDataStream();
             startStreamButton.interactable = false;
             stopStreamButton.interactable = true;
         }
 
         private void OnStopStreamClick()
         {
-            controller.StopDataStream();
+            ganglion.StopDataStream();
             startStreamButton.interactable = true;
             stopStreamButton.interactable = false;
         }
 
         private void OnChannel1ToggleChange(bool isOn)
         {
-            controller.SetChannelActive(1, isOn);
+            ganglion.SetChannelActive(1, isOn);
         }
 
         private void OnChannel2ToggleChange(bool isOn)
         {
-            controller.SetChannelActive(2, isOn);
+            ganglion.SetChannelActive(2, isOn);
         }
 
         private void OnChannel3ToggleChange(bool isOn)
         {
-            controller.SetChannelActive(3, isOn);
+            ganglion.SetChannelActive(3, isOn);
         }
 
         private void OnChannel4ToggleChange(bool isOn)
         {
-            controller.SetChannelActive(4, isOn);
+            ganglion.SetChannelActive(4, isOn);
         }
 
         private void OnAccelToggleChange(bool isOn)
         {
-            controller.SetSendAccelerometerData(isOn);
+            ganglion.SetSendAccelerometerData(isOn);
         }
 
         private void OnImpedanceToggleChange(bool isOn)
         {
-            controller.SetImpedanceMode(isOn);
+            ganglion.SetImpedanceMode(isOn);
         }
 
         private void OnSynthToggleChange(bool isOn)
         {
-            controller.SetFakeSquareWaveMode(isOn);
+            ganglion.SetFakeSquareWaveMode(isOn);
         }
 
         private void OnConnected()

@@ -1,17 +1,13 @@
 ﻿using GanglionUnity.Components;
-using GanglionUnity.Experimental;
 using GanglionUnity.Internal;
-using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using UnityEngine;
-using Debug = UnityEngine.Debug;
 
-public class FocusExample : MonoBehaviour
+public class FocusMeasurer : MonoBehaviour
 {
     public int FFTSize = 256;
-    public GanglionController controller;
+    public GanglionManager ganglion;
     public GameObject connectionPanelGO;
     public EEGChart freqChart;
     private List<float> m_samples;
@@ -56,5 +52,5 @@ public class FocusExample : MonoBehaviour
             connectionPanelGO.SetActive(!connectionPanelGO.activeSelf);
         }
     }
-   
+
 }

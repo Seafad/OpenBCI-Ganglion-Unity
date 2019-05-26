@@ -17,6 +17,7 @@ namespace GanglionUnity.Internal
         public event EventHandler<string> Message;
 
         public abstract void Search(int timeoutSecs);
+        public abstract void StopSearch();
         public abstract void Connect(GanglionInfo info);
         public abstract void Disconnect();
         public abstract void StartDataStream();

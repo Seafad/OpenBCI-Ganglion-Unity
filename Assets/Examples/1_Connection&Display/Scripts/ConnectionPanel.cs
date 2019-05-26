@@ -8,20 +8,22 @@ using UnityEngine.UI;
 namespace GanglionUnity.Examples
 {
     /// <summary>
-    /// Example of UI managing Ganglion connection with GanglionController
+    /// Example of UI managing Ganglion connection with GanglionManager
     /// </summary>
     public class ConnectionPanel : MonoBehaviour
     {
-        [SerializeField] private GanglionController controller;
+        [SerializeField] private GanglionManager ganglion;
         [SerializeField] private Button searchButton, connectButton, disconnectButton;
         [SerializeField] private Dropdown ganglionDropdown;
 
         private List<GanglionInfo> ganglions = new List<GanglionInfo>();
         private GanglionInfo? selectedGanglion;
+        private Text searchButtonText;
 
         private void Awake()
         {
             GanglionNotSelected();
+            searchButtonText = searchButton.GetComponentInChildren<Text>();
             AddListeners();
             ganglionDropdown.AddOptions(new List<string> { "Not selected" });
         }
@@ -32,29 +34,37 @@ namespace GanglionUnity.Examples
             connectButton.onClick.AddListener(OnConnectClick);
             disconnectButton.onClick.AddListener(OnDisconnectClick);
 
-            controller.OnGanglionFound.AddListener(OnFound);
-            controller.OnSearchEnded.AddListener(OnSearchEnded);
-            controller.OnConnected.AddListener(OnConnected);
-            controller.OnDisconnected.AddListener(OnDisconnected);
+            ganglion.OnGanglionFound.AddListener(OnFound);
+            ganglion.OnSearchEnded.AddListener(OnSearchEnded);
+            ganglion.OnConnected.AddListener(OnConnected);
+            ganglion.OnDisconnected.AddListener(OnDisconnected);
             ganglionDropdown.onValueChanged.AddListener(OnGanglionDropdownValueChange);
         }
 
         #region Listeners
         private void OnSearchClick()
         {
-            controller.Search();
-            connectButton.interactable = false;
+            if (ganglion.CurrentState == GanglionManager.State.NotConnected)
+            {
+                ganglion.Search();
+                searchButtonText.text = "Stop Search";
+            }
+            else if (ganglion.CurrentState == GanglionManager.State.Searching)
+            {
+                ganglion.StopSearch();
+                searchButtonText.text = "Start Search";
+            }
         }
 
         private void OnConnectClick()
         {
             if (selectedGanglion.HasValue)
-                controller.Connect(selectedGanglion.Value);
+                ganglion.Connect(selectedGanglion.Value);
         }
 
         private void OnDisconnectClick()
         {
-            controller.Disconnect();
+            ganglion.Disconnect();
         }
 
         private void OnGanglionDropdownValueChange(int index)
@@ -67,6 +77,7 @@ namespace GanglionUnity.Examples
 
         private void OnSearchEnded()
         {
+            searchButtonText.text = "Start Search";
             if (selectedGanglion.HasValue)
                 connectButton.interactable = true;
         }
@@ -97,7 +108,7 @@ namespace GanglionUnity.Examples
         private void GanglionSelected(GanglionInfo ganglionInfo)
         {
             selectedGanglion = ganglionInfo;
-            if (controller.CurrentState == GanglionController.State.NotConnected)
+            if (ganglion.CurrentState == GanglionManager.State.NotConnected)
             {
                 connectButton.interactable = true;
             }
