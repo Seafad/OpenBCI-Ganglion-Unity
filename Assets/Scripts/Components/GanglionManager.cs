@@ -4,11 +4,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
-/// <summary>
-/// Enables communication with Ganglion board. Currently, the only option is to use API implemented with <see cref="https://github.com/OpenBCI/OpenBCI_NodeJS_Ganglion">node.js Ganglion library</see>.
-/// </summary>
 namespace GanglionUnity.Components
 {
+    /// <summary>
+    /// Enables communication with Ganglion board. Currently, the only option is to use API implemented with <see cref="https://github.com/OpenBCI/OpenBCI_NodeJS_Ganglion">node.js Ganglion library</see>.
+    /// </summary>
     public class GanglionManager : MonoBehaviour, IGanglion
     {
         public enum ConnectionType { Node, NativeCppDriver }
