@@ -13,20 +13,22 @@ namespace GanglionUnity.Components
         [SerializeField]
         private int recordTimeSec;
         [SerializeField]
+        private float zeroFocusDistance;
+        [SerializeField]
         private RectTransform FocusedPointPrefab, UnfocusedPointPrefab, CurrPoint;
         [SerializeField]
         private RectTransform DataPointContainer;
         private float timeLeft;
         public Button FocusedRecordButton, UnfocusedRecordButton, ClearButton;
-        private float alpha, beta;
+        private float alpha, beta, gamma;
         private float hzPerIndex;
         private OrderedChunkBuffer<float> waveBuffer;
-        private int alphaStart, alphaEnd, betaStart, betaEnd;
+        private int alphaStart, alphaEnd, betaStart, betaEnd, gammaStart, gammaEnd;
         private bool isRecording;
         private bool isRecordingFocused;
-        private List<Vector2> focusedPoints = new List<Vector2>(), unfocusedPoints = new List<Vector2>();
+        private List<Vector3> focusedPoints = new List<Vector3>(), unfocusedPoints = new List<Vector3>();
         private float scale;
-        private Vector2 focusedCenter, unfocusedCenter, currPoint;
+        private Vector3 focusedCenter, unfocusedCenter, currPoint;
 
         private void Start()
         {
@@ -36,12 +38,14 @@ namespace GanglionUnity.Components
             alphaEnd = (int)(13 / hzPerIndex);
             betaStart = (int)(14 / hzPerIndex);
             betaEnd = (int)(30 / hzPerIndex);
+            gammaStart = (int)(31 / hzPerIndex);
+            gammaEnd = (int)(45 / hzPerIndex);
             FocusedRecordButton.onClick.AddListener(RecordFocused);
             UnfocusedRecordButton.onClick.AddListener(RecordUnfocused);
             ClearButton.onClick.AddListener(ClearData);
             timeLeft = recordTimeSec;
             scale = DataPointContainer.rect.width / 100;
-            currPoint = new Vector2();
+            currPoint = new Vector3();
         }
 
         private void Update()
@@ -57,8 +61,9 @@ namespace GanglionUnity.Components
             }
         }
 
-        private void OnNewSpectrumData(float[] spectrum)
+        private void OnNewSpectrumData(float[] spectrum, int channelIndex)
         {
+            if (channelIndex != 0) return;
             alpha = 0;
             for (int i = alphaStart; i <= alphaEnd; i++)
             {
@@ -69,47 +74,60 @@ namespace GanglionUnity.Components
             {
                 beta += spectrum[i];
             }
+            gamma = 0;
+            for (int i = gammaStart; i <= gammaEnd; i++)
+            {
+                gamma += spectrum[i];
+            }
 
             if (isRecording)
             {
                 if (isRecordingFocused)
                 {
-                    focusedPoints.Add(new Vector2(alpha, beta));
+                    var dataPoint = new Vector3(alpha, beta, gamma);
+                    focusedPoints.Add(dataPoint);
                     var tr = Instantiate(FocusedPointPrefab, DataPointContainer);
                     tr.gameObject.SetActive(true);
                     tr.anchoredPosition = new Vector2(alpha * scale, beta * scale);
-                    focusedCenter = new Vector2();
+                    focusedCenter = new Vector3();
                     foreach (var p in focusedPoints)
                     {
                         focusedCenter.x += p.x;
                         focusedCenter.y += p.y;
+                        focusedCenter.z += p.z;
                     }
                     focusedCenter.x /= focusedPoints.Capacity;
                     focusedCenter.y /= focusedPoints.Capacity;
+                    focusedCenter.z /= focusedPoints.Capacity;
                 }
                 else
                 {
-                    unfocusedPoints.Add(new Vector2(alpha, beta));
+                    var dataPoint = new Vector3(alpha, beta, gamma);
+                    unfocusedPoints.Add(dataPoint);
                     var tr = Instantiate(UnfocusedPointPrefab, DataPointContainer);
                     tr.gameObject.SetActive(true);
                     tr.anchoredPosition = new Vector2(alpha * scale, beta * scale);
-                    unfocusedCenter = new Vector2();
+                    unfocusedCenter = new Vector3();
                     foreach (var p in unfocusedPoints)
                     {
                         unfocusedCenter.x += p.x;
                         unfocusedCenter.y += p.y;
+                        unfocusedCenter.z += p.z;
                     }
                     unfocusedCenter.x /= unfocusedPoints.Capacity;
                     unfocusedCenter.y /= unfocusedPoints.Capacity;
+                    unfocusedCenter.z /= unfocusedPoints.Capacity;
                 }
             }
             else
             {
                 currPoint.x = alpha;
                 currPoint.y = beta;
+                currPoint.z = gamma;
                 CurrPoint.anchoredPosition = new Vector2(alpha * scale, beta * scale);
                 var unfocDist = Vector2.Distance(currPoint, unfocusedCenter);
-                var focDist = Vector2.Distance(currPoint, focusedCenter);
+                var focDist = Vector3.Distance(currPoint, focusedCenter);
+                //var focus = Math.Max(0, (1 - (focDist / zeroFocusDistance)));
                 Debug.Log("Focus: " + (focDist / unfocDist) + " (UnfocDist: " + unfocDist + "FocDist: " + focDist + ")");
             }
         }

@@ -23,6 +23,7 @@ namespace GanglionUnity.Components
         public AccelerationEvent OnAccelDataReceived;
         public ImpedanceEvent OnImpedanceReceived;
         public UnityEvent OnSearchEnded, OnConnected, OnDisconnected, OnStreamStart, OnStreamEnd;
+        public ChannelEvent OnChannelTurnedOn, OnChannelTurnedOff;
 
         [SerializeField] private ConnectionType connectionType;
         [SerializeField] private string nodeHost = "127.0.0.1";
@@ -39,6 +40,7 @@ namespace GanglionUnity.Components
         private GanglionAPI api;
         private bool[] activeChannels = new bool[4];
         private static object _lock = new object();
+        public bool[] isChannelActive = new bool[4];
 
         private void Awake()
         {
@@ -139,6 +141,12 @@ namespace GanglionUnity.Components
             }
         }
 
+        public bool IsChannelActive(int channelNumber)
+        {
+            if (channelNumber < 0 || channelNumber > 3) throw new ArgumentOutOfRangeException("channelNumber");
+            return isChannelActive[channelNumber];
+        }
+
         private void SearchEnded()
         {
             CurrentState = State.NotConnected;
@@ -214,6 +222,10 @@ namespace GanglionUnity.Components
             if (CurrentState == State.NotConnected)
             {
                 api.Connect(info);
+                isChannelActive[0] = true;
+                isChannelActive[1] = true;
+                isChannelActive[2] = true;
+                isChannelActive[3] = true;
             }
             else
             {
@@ -226,6 +238,10 @@ namespace GanglionUnity.Components
             if (CurrentState != State.NotConnected && CurrentState != State.Searching)
             {
                 api.Disconnect();
+                isChannelActive[0] = false;
+                isChannelActive[1] = false;
+                isChannelActive[2] = false;
+                isChannelActive[3] = false;
             }
             else
             {
@@ -273,11 +289,17 @@ namespace GanglionUnity.Components
             }
         }
 
-        public void SetChannelActive(int channelNumber, bool isOn)
+        public void SetChannelActive(int channelIndex, bool isOn)
         {
+            if (channelIndex < 0 || channelIndex > 3) throw new ArgumentOutOfRangeException("channelIndex");
             if (CurrentState != State.NotConnected && CurrentState != State.Searching)
             {
-                api.SetChannelActive(channelNumber, isOn);
+                api.SetChannelActive(channelIndex + 1, isOn);
+                isChannelActive[channelIndex] = isOn;
+                if (isOn)
+                    OnChannelTurnedOn.Invoke(channelIndex);
+                else
+                    OnChannelTurnedOff.Invoke(channelIndex);
             }
             else
             {
@@ -354,4 +376,5 @@ namespace GanglionUnity.Components
     [Serializable] public class ImpedanceEvent : UnityEvent<int, int> { };
     [Serializable] public class MessageEvent : UnityEvent<string> { };
     [Serializable] public class GanglionFoundEvent : UnityEvent<GanglionInfo> { };
+    [Serializable] public class ChannelEvent : UnityEvent<int> { };
 }

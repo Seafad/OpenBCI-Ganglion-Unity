@@ -36,7 +36,7 @@ namespace GanglionUnity.Internal
             }
             catch (Exception e)
             {
-                Debug.LogError(GetType().Name + ">>Connection error. Please set up and launch node.js server\n>>" + e.Message);
+                Debug.LogError(GetType().Name + ">>Node driver error. Please restart the app.\n>>" + e.Message);
             }
         }
 
@@ -49,17 +49,25 @@ namespace GanglionUnity.Internal
 
         private void StartNodeServer()
         {
-            try
+            if (Application.platform == RuntimePlatform.WindowsEditor || Application.platform == RuntimePlatform.WindowsPlayer)
             {
-                serverProcess = new Process();
-                serverProcess.EnableRaisingEvents = false;
-                serverProcess.StartInfo.FileName = Application.dataPath + "/node_server~/server-win.exe";
-                serverProcess.StartInfo.UseShellExecute = false;
-                serverProcess.Start();
+                try
+                {
+                    serverProcess = new Process();
+                    serverProcess.EnableRaisingEvents = false;
+                    serverProcess.StartInfo.CreateNoWindow = true;
+                    serverProcess.StartInfo.FileName = Application.dataPath + "/node_server~/server-win.exe";
+                    serverProcess.StartInfo.UseShellExecute = false;
+                    serverProcess.Start();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("Unable to launch Node.js driver: " + e.Message);
+                }
             }
-            catch (Exception e)
+            else
             {
-                Debug.LogError("Unable to launch Node.js driver: " + e.Message);
+                Debug.LogError(GetType().Name + ">>Platform not yet supported.\n");
             }
         }
 
