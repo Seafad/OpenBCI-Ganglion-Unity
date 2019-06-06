@@ -1,43 +1,73 @@
 ﻿using GanglionUnity.Internal;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace GanglionUnity.Components
 {
     public class EEGChart : MonoBehaviour
     {
-        public bool filtered;
-        [Range(0.01f, 1)]
-        public float updateRate;
+        [SerializeField]
+        private bool filtered;
         [Range(.05f, .5f)]
-        public float timeStep;
-        [SerializeField, Range(1, 100000)]
-        private int scale;
+        private float timeStep;
+        [SerializeField]
+        private VoltageScale voltageScale;
+        [SerializeField]
+        private RectTransform channelRT;
+        [SerializeField]
+        private float paddingRight;
+        [SerializeField]
+        private Toggle filterToggle;
+        [SerializeField]
+        private Dropdown voltageDropdown;
 
-        private RectTransform rectTransform;
-        private EEGChartChunk[] Chunks;
-        private int currChunkIndex = 0;
-
-        private int valCount;
         private float width, leftPos;
-        private float stepX = 2;
-        private float timeLeft;
+        private int valuesCount;
+        private float stepX;
 
-        private float[] waveBuffer = new float[128];
+        private GanglionManager ganglion;
+        private LineRenderer[] channelLR;
+        private int maxValue;
+        private int MCV_SCALE = 1000000;
+
+        // private EEGChartChunk[] Chunks;
+        // private int currChunkIndex = 0;
+        private float timeLeft;
         private int currWaveIndex;
+        private OrderedChunkBuffer<float>[] displayBuffers = new OrderedChunkBuffer<float>[4];
+        private int bufferChunkSize = 64, bufferChunks = 8;
+        private float[] filteredSignal;
+        private int sampleRate = 200;
 
         private void Awake()
         {
-            rectTransform = GetComponent<RectTransform>();
-            Chunks = GetComponentsInChildren<EEGChartChunk>();
-            foreach (var chunk in Chunks)
-            {
-                chunk.Scale = scale;
-            }
+            for (int i = 0; i < 4; i++)
+                displayBuffers[i] = new OrderedChunkBuffer<float>(bufferChunkSize, bufferChunks);
             timeLeft = timeStep;
-            width = rectTransform.rect.width;
-            leftPos = rectTransform.position.x;
-            valCount = (int)(width / stepX) - 1;
+        }
+
+        private IEnumerator Start()
+        {
+            ganglion = GanglionManager.Instance;
+            ganglion.OnEEGReceived.AddListener(OnEEGReceived);
+            ganglion.OnChannelTurnedOff.AddListener(OnChannelOff);
+            channelLR = GetComponentsInChildren<LineRenderer>();
+            filterToggle.isOn = filtered;
+            maxValue = VoltageScale2Voltage(voltageScale);
+            voltageDropdown.value = (int)voltageScale;
+            
+            filterToggle.onValueChanged.AddListener(OnFilterToggleClick);
+            voltageDropdown.onValueChanged.AddListener(OnVoltageDropdownChanged);
+            yield return new WaitForEndOfFrame();
+            InitDisplay(bufferChunkSize * bufferChunks);
+        }
+
+        private void OnChannelOff(int channelIndex)
+        {
+            displayBuffers[channelIndex].Clear();
+            InitDisplayForChannel(channelIndex);
         }
 
         private void Update()
@@ -45,40 +75,90 @@ namespace GanglionUnity.Components
             timeLeft -= Time.deltaTime;
         }
 
+        private void OnFilterToggleClick(bool isOn)
+        {
+            filtered = isOn;
+        }
+
+        private void OnVoltageDropdownChanged(int newVoltageScale)
+        {
+            voltageScale = (VoltageScale)newVoltageScale;
+            maxValue = VoltageScale2Voltage(voltageScale);
+        }
+
+
         public void OnEEGReceived(List<EEGSample> eegs)
         {
-            float[] newValues = new float[eegs.Count];
-
             for (int i = 0; i < eegs.Count; i++)
-            {
-                if (filtered)
+                for (int j = 0; j < 4; j++)
                 {
-                    waveBuffer[currWaveIndex++] = (float)eegs[i].channelData[0];
-                    if (currWaveIndex == waveBuffer.Length - 1)
+                    if (ganglion.IsChannelActive(j))
                     {
-                        currWaveIndex = 0;
+                        displayBuffers[j].Write((float)eegs[i].channelData[j]);
+                        if (displayBuffers[j].IsFull)
+                        {
+                            if (filtered)
+                            {
+                                filteredSignal = displayBuffers[j].GetLastChunkValues();
+                                DataProcessing.FilterFreqsAbove50Hz(ref filteredSignal, sampleRate, 6);
+                                displayBuffers[j].SetChunkValues(filteredSignal, bufferChunks - 1);
+                            }
+                            DisplayValues(displayBuffers[j].GetAllValues(), j);
+                        }
                     }
                 }
-                else
-                    newValues[i] = (float)eegs[i].channelData[0];
-            }
-            if (timeLeft <= 0)
+        }
+
+        private void InitDisplay(int valuesCount)
+        {
+            this.valuesCount = valuesCount;
+            width = channelRT.rect.width;
+            leftPos = channelRT.anchoredPosition.x;
+            stepX = (width - paddingRight) / (valuesCount - 1);
+
+            for (int i = 0; i < 4; i++)
+                InitDisplayForChannel(i);
+        }
+
+        private void InitDisplayForChannel(int channelIndex)
+        {
+            channelLR[channelIndex].positionCount = valuesCount;
+            Vector3 curr = new Vector3();
+            for (int i = 0; i < valuesCount; i++)
             {
-                if (filtered)
-                {
-                    int lastIndex = 0;
-                    while (lastIndex != -1)
-                    {
-                        lastIndex = Chunks[currChunkIndex++].DisplayValues(waveBuffer, lastIndex);
-                        currChunkIndex %= Chunks.Length;
-                    }
-                }
-                else
-                {
-                    // DisplayValues(newValues);
-                }
-                timeLeft = timeStep;
+                curr.x = leftPos + i * stepX;
+                curr.y = -channelRT.rect.height / 2;
+                channelLR[channelIndex].SetPosition(i, curr);
             }
         }
+
+        private void DisplayValues(float[] values, int channelIndex)
+        {
+            Vector3 curr = new Vector3(0, 0);
+            for (int i = 0; i < values.Length; i++)
+            {
+                curr.x = leftPos + i * stepX;
+                curr.y = Mathf.Clamp(values[i] * MCV_SCALE * (channelRT.rect.height / ((int)maxValue * 2)) - channelRT.rect.height / 2, -channelRT.rect.height, 0);
+                channelLR[channelIndex].SetPosition(i, curr);
+            }
+        }
+        private int VoltageScale2Voltage(VoltageScale vs)
+        {
+            switch (vs)
+            {
+                case VoltageScale.mv50:
+                    return 50;
+                case VoltageScale.mv100:
+                    return 100;
+                case VoltageScale.mv250:
+                    return 250;
+                case VoltageScale.mv500:
+                    return 500;
+                default:
+                    return 50;
+            }
+        }
+
+        public enum VoltageScale { mv50, mv100, mv250, mv500 };
     }
 }

@@ -95,7 +95,7 @@ namespace GanglionUnity.Internal
             this.valuesCount = valuesCount;
             this.hzPerIndex = hzPerIndex;
             this.lineIntervalHz = lineIntervalHz;
-            leftPos = displayRT.rect.x;
+            leftPos = displayRT.anchoredPosition.x;
             stepX = displayRT.rect.width / (valuesCount - 1);
 
             for (int i = 0; i < 4; i++)

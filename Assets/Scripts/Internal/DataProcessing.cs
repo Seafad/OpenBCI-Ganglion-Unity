@@ -48,10 +48,17 @@ namespace GanglionUnity.Internal
         public static float[] FilterFreqsAbove50Hz(ref float[] signal, int sampleRate, int logN)
         {
             float[] im = new float[signal.Length];
-            int Hz50Index = (int)(50 / ((float)sampleRate / signal.Length)) + 1;
+            float bucketWidth = (float)sampleRate / signal.Length;
+            int startIndex = (int)((10 + bucketWidth / 2) / bucketWidth);
+            int endIndex = Math.Min((int)((50 + bucketWidth / 2) / bucketWidth), signal.Length - 1);
 
             FFT(ref signal, ref im, signal.Length, logN, true);
-            for (int i = Hz50Index; i < signal.Length; i++)
+            for (int i = 0; i <= startIndex; i++)
+            {
+                signal[i] = 0;
+                im[i] = 0;
+            }
+            for (int i = endIndex; i < signal.Length; i++)
             {
                 signal[i] = 0;
                 im[i] = 0;

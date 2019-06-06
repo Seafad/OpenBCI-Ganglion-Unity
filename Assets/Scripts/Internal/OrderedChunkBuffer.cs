@@ -83,5 +83,19 @@ namespace GanglionUnity.Internal
             bufferWriteIndex = lastChunkStartIndex;
         }
 
+        public float[] GetLastChunkValues()
+        {
+            float[] lastChunkVals = new float[ChunkSize];
+            Array.Copy(buffer, ChunkSize * (ChunksCount - 1), lastChunkVals, 0, ChunkSize);
+            return lastChunkVals;
+        }
+
+        public void SetChunkValues(float[] values, int chunkIndex)
+        {
+            if(chunkIndex < 0 || chunkIndex >= ChunksCount) throw new ArgumentOutOfRangeException("chunkIndex");
+            if(values.Length != ChunkSize) throw new ArgumentException("Array size should be equal to ChunkSize", "values");
+            Array.Copy(values, 0, buffer, ChunkSize * chunkIndex, ChunkSize);
+        }
+  
     }
 }
